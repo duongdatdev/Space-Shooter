@@ -369,6 +369,7 @@ GameObject:
   - component: {fileID: 347336696}
   - component: {fileID: 347336695}
   - component: {fileID: 347336694}
+  - component: {fileID: 885106771}
   m_Layer: 0
   m_Name: Main Camera
   m_TagString: MainCamera
@@ -807,6 +808,19 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 627801186}
   m_CullTransparentMesh: 1
+--- !u!114 &885106771
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 347336693}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b32f00b2adbbf6f4497d4414f4343333, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: MeteorShooter.Runtime::MeteorShooter.CameraFollow
+  followSpeed: 6
 --- !u!1 &909784470
 GameObject:
   m_ObjectHideFlags: 0
@@ -839,8 +853,8 @@ MonoBehaviour:
   panels:
   - {fileID: 1205452823}
   - {fileID: 1742349531}
-  scrollSpeed: 0.22
-  panelHeight: 10.82
+  parallaxFactor: 0.24
+  starParallaxFactor: 0.82
 --- !u!4 &909784472
 Transform:
   m_ObjectHideFlags: 0
@@ -1103,9 +1117,13 @@ MonoBehaviour:
   - {fileID: 8189338091767558401, guid: f19c0047b115e4b4fa2ab77adc3a5727, type: 3}
   - {fileID: 3148297999075438452, guid: bf6a3318ead75d646ad6f945c281d9eb, type: 3}
   - {fileID: 7342816930422851130, guid: a3f73bf3c9b4dba47b9e2dbd5ac0421b, type: 3}
+  starHazardPrefab: {fileID: 789436387301922688, guid: b48e7a1f9659bd243812aac3750b9985, type: 3}
+  starSpawnChance: 0.24
   initialInterval: 1.05
   minimumInterval: 0.38
-  spawnY: 6.25
+  spawnMargin: 1.35
+  minimumPlayerDistance: 4
+  targetJitter: 1.6
 --- !u!4 &978140824
 Transform:
   m_ObjectHideFlags: 0
@@ -1330,7 +1348,7 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.04, y: 0.92}
   m_AnchorMax: {x: 0.54, y: 0.985}
-  m_AnchoredPosition: {x: -0.000030517578, y: 0}
+  m_AnchoredPosition: {x: -0.000061035156, y: 0}
   m_SizeDelta: {x: -0.000030517578, y: 0}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!1 &1205452822

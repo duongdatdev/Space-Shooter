@@ -1,0 +1,6 @@
+﻿<Solution>
+  <Project Path="MeteorShooter.Runtime.csproj" />
+  <Project Path="MeteorShooter.PlayModeTests.csproj" />
+  <Project Path="Assembly-CSharp-Editor.csproj" />
+  <Project Path="MeteorShooter.EditModeTests.csproj" />
+</Solution>

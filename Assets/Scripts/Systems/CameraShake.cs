@@ -6,9 +6,7 @@ namespace MeteorShooter
     public sealed class CameraShake : MonoBehaviour
     {
         private Coroutine routine;
-        private Vector3 origin;
-
-        private void Awake() => origin = transform.localPosition;
+        public Vector3 Offset { get; private set; }
 
         public void Shake(float duration, float magnitude)
         {
@@ -22,10 +20,10 @@ namespace MeteorShooter
             while (elapsed < duration)
             {
                 elapsed += Time.unscaledDeltaTime;
-                transform.localPosition = origin + (Vector3)(Random.insideUnitCircle * magnitude);
+                Offset = (Vector3)(Random.insideUnitCircle * magnitude);
                 yield return null;
             }
-            transform.localPosition = origin;
+            Offset = Vector3.zero;
             routine = null;
         }
     }

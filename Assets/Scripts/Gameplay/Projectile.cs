@@ -14,7 +14,7 @@ namespace MeteorShooter
 
         private void OnEnable()
         {
-            body.linearVelocity = Vector2.up * speed;
+            body.linearVelocity = (Vector2)transform.up * speed;
             Destroy(gameObject, lifetime);
         }
 
@@ -22,6 +22,8 @@ namespace MeteorShooter
         {
             Asteroid asteroid = other.GetComponent<Asteroid>();
             if (asteroid != null && asteroid.Hit()) Destroy(gameObject);
+            StarHazard star = other.GetComponent<StarHazard>();
+            if (star != null && star.Hit()) Destroy(gameObject);
         }
     }
 }

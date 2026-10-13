@@ -8,6 +8,7 @@ namespace MeteorShooter
         [SerializeField] private float baseSpeed = 2.2f;
         [SerializeField] private float speedJitter = 0.45f;
         [SerializeField] private float rotationRange = 70f;
+        [SerializeField] private float lifetime = 22f;
 
         private float speed;
         private float rotationSpeed;
@@ -23,11 +24,12 @@ namespace MeteorShooter
             rotationSpeed = Random.Range(-rotationRange, rotationRange);
             body.linearVelocity = Vector2.down * speed;
             body.angularVelocity = rotationSpeed;
+            Destroy(gameObject, lifetime);
         }
 
-        private void Update()
+        public void SetTravelDirection(Vector2 direction)
         {
-            if (transform.position.y < -6.8f) Destroy(gameObject);
+            if (direction.sqrMagnitude > 0.0001f) body.linearVelocity = direction.normalized * speed;
         }
 
         public bool Hit()

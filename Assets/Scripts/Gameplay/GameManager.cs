@@ -30,6 +30,7 @@ namespace MeteorShooter
         public bool IsPaused { get; private set; }
         public float ElapsedTime { get; private set; }
         public float Difficulty => CalculateDifficulty(Score, ElapsedTime);
+        public static int HighScore => PlayerPrefs.GetInt(HighScoreKey, 0);
 
         private void Awake() => InitializeSession();
 
@@ -63,8 +64,13 @@ namespace MeteorShooter
         public void AddAsteroidScore()
         {
             if (IsGameOver) return;
-            Score += PointsPerAsteroid;
-            UpdateHud();
+            AddScore(PointsPerAsteroid);
+        }
+
+        public void AddStarScore()
+        {
+            if (IsGameOver) return;
+            AddScore(PointsPerAsteroid);
         }
 
         public bool LoseLife()
@@ -82,12 +88,13 @@ namespace MeteorShooter
             IsGameOver = true;
             spawner?.StopSpawning();
             foreach (Asteroid asteroid in FindObjectsByType<Asteroid>()) Destroy(asteroid.gameObject);
+            foreach (StarHazard star in FindObjectsByType<StarHazard>()) Destroy(star.gameObject);
             foreach (Projectile projectile in FindObjectsByType<Projectile>()) Destroy(projectile.gameObject);
             cameraShake?.Shake(0.35f, 0.2f);
             if (playerExplosionPrefab != null) Instantiate(playerExplosionPrefab, playerPosition, Quaternion.identity);
 
-            int highScore = Mathf.Max(PlayerPrefs.GetInt(HighScoreKey, 0), Score);
-            PlayerPrefs.SetInt(HighScoreKey, highScore);
+            SaveHighScore();
+            int highScore = HighScore;
             PlayerPrefs.Save();
             if (finalScoreText != null) finalScoreText.text = $"SCORE  {Score:0000}";
             if (highScoreText != null) highScoreText.text = $"HIGH SCORE  {highScore:0000}";
@@ -117,12 +124,14 @@ namespace MeteorShooter
 
         public void Restart()
         {
+            PersistHighScore();
             Time.timeScale = 1f;
             SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex);
         }
 
         public void MainMenu()
         {
+            PersistHighScore();
             Time.timeScale = 1f;
             SceneManager.LoadScene("MainMenu");
         }
@@ -138,6 +147,23 @@ namespace MeteorShooter
             if (scoreText != null) scoreText.text = $"SCORE  {Score:0000}";
             if (livesText != null) livesText.text = "LIVES  " + new string('◆', Lives);
         }
+
+        private void AddScore(int points)
+        {
+            Score += points;
+            UpdateHud();
+            SaveHighScore();
+        }
+
+        private void SaveHighScore()
+        {
+            if (Score <= HighScore) return;
+            PlayerPrefs.SetInt(HighScoreKey, Score);
+        }
+
+        private void PersistHighScore() => PlayerPrefs.Save();
+
+        private void OnApplicationQuit() => PersistHighScore();
 
         private void OnDestroy()
         {

@@ -28,19 +28,32 @@ namespace MeteorShooter
         private void Update()
         {
             if (dead || GameManager.Instance == null || GameManager.Instance.IsPaused || GameManager.Instance.IsGameOver) return;
+            Vector2 movement = Vector2.zero;
             Keyboard keyboard = Keyboard.current;
-            if (keyboard == null) return;
+            if (keyboard != null)
+            {
+                if (keyboard.aKey.isPressed || keyboard.leftArrowKey.isPressed) movement.x -= 1f;
+                if (keyboard.dKey.isPressed || keyboard.rightArrowKey.isPressed) movement.x += 1f;
+                if (keyboard.sKey.isPressed || keyboard.downArrowKey.isPressed) movement.y -= 1f;
+                if (keyboard.wKey.isPressed || keyboard.upArrowKey.isPressed) movement.y += 1f;
+            }
+            transform.position += (Vector3)(NormalizeMovement(movement) * (moveSpeed * Time.deltaTime));
 
-            float horizontal = 0f;
-            if (keyboard.aKey.isPressed || keyboard.leftArrowKey.isPressed) horizontal -= 1f;
-            if (keyboard.dKey.isPressed || keyboard.rightArrowKey.isPressed) horizontal += 1f;
-            transform.position += Vector3.right * (horizontal * moveSpeed * Time.deltaTime);
-            ClampToView();
+            Mouse mouse = Mouse.current;
+            if (mouse == null) return;
+            if (mainCamera == null) mainCamera = Camera.main;
+            if (mainCamera == null) return;
 
-            if (keyboard.spaceKey.isPressed && Time.time >= nextShotTime)
+            Vector3 mouseScreenPosition = mouse.position.ReadValue();
+            mouseScreenPosition.z = transform.position.z - mainCamera.transform.position.z;
+            Vector3 mouseWorldPosition = mainCamera.ScreenToWorldPoint(mouseScreenPosition);
+            Vector2 aimDirection = (Vector2)(mouseWorldPosition - transform.position);
+            if (TryGetAimRotation(aimDirection, out Quaternion aimRotation)) transform.rotation = aimRotation;
+
+            if (mouse.leftButton.isPressed && Time.time >= nextShotTime && projectilePrefab != null && firePoint != null)
             {
                 nextShotTime = Time.time + fireCooldown;
-                Instantiate(projectilePrefab, firePoint.position, Quaternion.identity);
+                Instantiate(projectilePrefab, firePoint.position, firePoint.rotation);
             }
         }
 
@@ -60,14 +73,19 @@ namespace MeteorShooter
             return true;
         }
 
-        private void ClampToView()
+        public static Vector2 NormalizeMovement(Vector2 movement) => movement.sqrMagnitude > 1f ? movement.normalized : movement;
+
+        public static bool TryGetAimRotation(Vector2 direction, out Quaternion rotation)
         {
-            if (mainCamera == null) return;
-            float halfWidth = mainCamera.orthographicSize * mainCamera.aspect;
-            float spriteHalfWidth = spriteRenderer.bounds.extents.x;
-            Vector3 position = transform.position;
-            position.x = Mathf.Clamp(position.x, -halfWidth + spriteHalfWidth + 0.08f, halfWidth - spriteHalfWidth - 0.08f);
-            transform.position = position;
+            if (direction.sqrMagnitude <= 0.0001f)
+            {
+                rotation = Quaternion.identity;
+                return false;
+            }
+
+            float angle = Mathf.Atan2(direction.y, direction.x) * Mathf.Rad2Deg - 90f;
+            rotation = Quaternion.Euler(0f, 0f, angle);
+            return true;
         }
 
         private IEnumerator InvulnerabilityRoutine()

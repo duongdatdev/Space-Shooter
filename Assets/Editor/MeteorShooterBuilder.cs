@@ -16,12 +16,19 @@ public static class MeteorShooterBuilder
     private const string PrefabFolder = "Assets/Prefabs";
     private const string AnimationFolder = "Assets/Animations";
     private const string SceneFolder = "Assets/Scenes";
+    private const string StarArtFolder = "Assets/Art/StarHazard";
+    private const string StarVariantsFolder = "Assets/Art/StarHazard/Variants";
+    private const string PlayerIdlePrefix = "Assets/Art/Player/player_idle_";
+    private const string ProjectileSpritePath = "Assets/Art/Projectiles/laser.png";
+    private static readonly string[] StarVariantNames = { "pink", "blue", "purple", "lime", "gold", "mint", "orange", "lavender" };
     private static Font font;
 
     [MenuItem("Meteor Shooter/Build Complete Game")]
     public static void Build()
     {
+        ValidateStarVariantFiles();
         EnsureFolders();
+        Directory.CreateDirectory(StarArtFolder);
         ConfigureTextures();
         AssetDatabase.Refresh();
         font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
@@ -43,10 +50,12 @@ public static class MeteorShooterBuilder
             CreateAsteroidPrefab("AsteroidMedium", "Assets/Art/Asteroids/asteroid_medium.png", 2.15f, 0.42f),
             CreateAsteroidPrefab("AsteroidLarge", "Assets/Art/Asteroids/asteroid_large.png", 1.85f, 0.48f)
         };
+        AssetDatabase.Refresh(ImportAssetOptions.ForceSynchronousImport);
+        GameObject starHazard = CreateStarHazardPrefab(LoadStarVariantSprites());
         GameObject player = CreatePlayerPrefab(playerController, bullet);
 
         BuildMainMenuScene();
-        BuildGameplayScene(player, asteroids, asteroidFx, playerFx);
+        BuildGameplayScene(player, asteroids, starHazard, asteroidFx, playerFx);
         EditorBuildSettings.scenes = new[]
         {
             new EditorBuildSettingsScene("Assets/Scenes/MainMenu.unity", true),
@@ -59,6 +68,203 @@ public static class MeteorShooterBuilder
         AssetDatabase.Refresh();
         EditorSceneManager.OpenScene("Assets/Scenes/MainMenu.unity");
         Debug.Log("Meteor Shooter build complete: scenes, prefabs, animations, UI, and build settings created.");
+    }
+
+    [MenuItem("Meteor Shooter/Upgrade Star Hazard and Main Menu High Score")]
+    public static void UpgradeStarHazardAndMainMenuHighScore()
+    {
+        if (EditorApplication.isPlayingOrWillChangePlaymode)
+            throw new InvalidOperationException("Stop Play Mode before running this scoped upgrade.");
+        for (int i = 0; i < SceneManager.sceneCount; i++)
+            if (SceneManager.GetSceneAt(i).isDirty)
+                throw new InvalidOperationException("Save all open scenes before running this scoped upgrade.");
+        SceneSetup[] originalSetup = EditorSceneManager.GetSceneManagerSetup();
+        Directory.CreateDirectory(PrefabFolder);
+        Directory.CreateDirectory(StarVariantsFolder);
+        ValidateStarVariantFiles();
+        GameObject starPrefab = CreateStarHazardPrefab(LoadStarVariantSprites());
+
+        Scene gameplay = EditorSceneManager.OpenScene($"{SceneFolder}/Gameplay.unity", OpenSceneMode.Single);
+        AsteroidSpawner spawner = UnityEngine.Object.FindAnyObjectByType<AsteroidSpawner>();
+        if (spawner == null) throw new InvalidOperationException("Gameplay scene has no AsteroidSpawner.");
+        SetObject(spawner, "starHazardPrefab", starPrefab);
+        SetFloat(spawner, "starSpawnChance", 0.24f);
+        EditorSceneManager.MarkSceneDirty(gameplay);
+        EditorSceneManager.SaveScene(gameplay);
+
+        Scene menu = EditorSceneManager.OpenScene($"{SceneFolder}/MainMenu.unity", OpenSceneMode.Single);
+        font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+        MainMenuController controller = UnityEngine.Object.FindAnyObjectByType<MainMenuController>();
+        Canvas canvas = UnityEngine.Object.FindAnyObjectByType<Canvas>();
+        if (controller == null || canvas == null) throw new InvalidOperationException("MainMenu scene is missing its controller or Canvas.");
+        Text highScore = null;
+        foreach (Text candidate in canvas.GetComponentsInChildren<Text>(true))
+            if (candidate.gameObject.name == "MainMenuHighScore") { highScore = candidate; break; }
+        if (highScore == null)
+        {
+            highScore = CreateText(canvas.transform, "HIGH SCORE  0000", 21, new Vector2(0.08f, 0.48f), new Vector2(0.92f, 0.55f), new Color(1f, 0.72f, 0.27f), TextAnchor.MiddleCenter, FontStyle.Bold);
+            highScore.gameObject.name = "MainMenuHighScore";
+        }
+        SetObject(controller, "highScoreText", highScore);
+        EditorSceneManager.MarkSceneDirty(menu);
+        EditorSceneManager.SaveScene(menu);
+        AssetDatabase.SaveAssets();
+        EditorSceneManager.RestoreSceneManagerSetup(originalSetup);
+        Debug.Log("Star hazards and persistent MainMenu high score are wired into the existing scenes.");
+    }
+
+    [MenuItem("Meteor Shooter/Refresh Pixel Star Hazard Variants")]
+    public static void RefreshPixelStarHazardVariants()
+    {
+        if (EditorApplication.isPlayingOrWillChangePlaymode)
+            throw new InvalidOperationException("Stop Play Mode before refreshing the pixel star hazard variants.");
+        Directory.CreateDirectory(StarVariantsFolder);
+        ValidateStarVariantFiles();
+        Directory.CreateDirectory(PrefabFolder);
+        CreateStarHazardPrefab(LoadStarVariantSprites());
+        AssetDatabase.SaveAssets();
+        Debug.Log("Eight pixel star variants and the existing hazard prefab were refreshed; scene references are preserved.");
+    }
+
+    [MenuItem("Meteor Shooter/Refresh Player Ship Art")]
+    public static void RefreshPlayerShipArt()
+    {
+        if (EditorApplication.isPlayingOrWillChangePlaymode)
+            throw new InvalidOperationException("Stop Play Mode before refreshing the player ship art.");
+
+        Sprite[] frames = new Sprite[4];
+        for (int i = 0; i < frames.Length; i++)
+        {
+            string path = $"{PlayerIdlePrefix}{i + 1:00}.png";
+            if (!File.Exists(path)) throw new InvalidOperationException($"Player ship frame is missing: {path}");
+        }
+        string playerPrefabPath = $"{PrefabFolder}/Player.prefab";
+        string projectilePrefabPath = $"{PrefabFolder}/Bullet.prefab";
+        if (!File.Exists(ProjectileSpritePath)) throw new InvalidOperationException($"Projectile image is missing: {ProjectileSpritePath}");
+        if (!File.Exists(playerPrefabPath)) throw new InvalidOperationException($"Player prefab is missing: {playerPrefabPath}");
+        if (!File.Exists(projectilePrefabPath)) throw new InvalidOperationException($"Projectile prefab is missing: {projectilePrefabPath}");
+
+        for (int i = 0; i < frames.Length; i++)
+        {
+            string path = $"{PlayerIdlePrefix}{i + 1:00}.png";
+            AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceSynchronousImport | ImportAssetOptions.ForceUpdate);
+            ConfigurePlayerShipSprite(path);
+            frames[i] = AssetDatabase.LoadAssetAtPath<Sprite>(path);
+            if (frames[i] == null) throw new InvalidOperationException($"Player ship frame failed to import as a Sprite: {path}");
+        }
+        AssetDatabase.ImportAsset(ProjectileSpritePath, ImportAssetOptions.ForceSynchronousImport | ImportAssetOptions.ForceUpdate);
+        ConfigureProjectileSprite(ProjectileSpritePath);
+        Sprite projectileSprite = AssetDatabase.LoadAssetAtPath<Sprite>(ProjectileSpritePath);
+        if (projectileSprite == null) throw new InvalidOperationException($"Projectile image failed to import as a Sprite: {ProjectileSpritePath}");
+
+        SetPrefabSprite(playerPrefabPath, frames[0], "Player");
+        SetPrefabSprite(projectilePrefabPath, projectileSprite, "Bullet");
+
+        AssetDatabase.SaveAssets();
+        Debug.Log("Four player frames and the cyan projectile sprite were refreshed; existing prefab and scene references are preserved.");
+    }
+
+    private static void SetPrefabSprite(string prefabPath, Sprite sprite, string objectName)
+    {
+        GameObject prefabContents = PrefabUtility.LoadPrefabContents(prefabPath);
+        try
+        {
+            SpriteRenderer renderer = prefabContents.GetComponent<SpriteRenderer>();
+            if (renderer == null) throw new InvalidOperationException($"{objectName} prefab has no root SpriteRenderer.");
+            renderer.sprite = sprite;
+            PrefabUtility.SaveAsPrefabAsset(prefabContents, prefabPath);
+        }
+        finally
+        {
+            PrefabUtility.UnloadPrefabContents(prefabContents);
+        }
+    }
+
+    private static void ConfigurePlayerShipSprite(string path)
+    {
+        TextureImporter importer = AssetImporter.GetAtPath(path) as TextureImporter;
+        if (importer == null) throw new InvalidOperationException($"No texture importer found for player ship frame: {path}");
+        importer.textureType = TextureImporterType.Sprite;
+        importer.spriteImportMode = SpriteImportMode.Single;
+        importer.alphaIsTransparency = true;
+        importer.mipmapEnabled = false;
+        importer.filterMode = FilterMode.Bilinear;
+        importer.textureCompression = TextureImporterCompression.Uncompressed;
+        importer.spritePixelsPerUnit = 128f;
+        TextureImporterSettings settings = new TextureImporterSettings();
+        importer.ReadTextureSettings(settings);
+        settings.spriteMeshType = SpriteMeshType.FullRect;
+        settings.spriteAlignment = (int)SpriteAlignment.Center;
+        settings.spritePivot = new Vector2(0.5f, 0.5f);
+        importer.SetTextureSettings(settings);
+        importer.SaveAndReimport();
+    }
+
+    private static void ConfigureProjectileSprite(string path)
+    {
+        TextureImporter importer = AssetImporter.GetAtPath(path) as TextureImporter;
+        if (importer == null) throw new InvalidOperationException($"No texture importer found for projectile: {path}");
+        importer.textureType = TextureImporterType.Sprite;
+        importer.spriteImportMode = SpriteImportMode.Single;
+        importer.alphaIsTransparency = true;
+        importer.mipmapEnabled = false;
+        importer.filterMode = FilterMode.Bilinear;
+        importer.textureCompression = TextureImporterCompression.Uncompressed;
+        importer.spritePixelsPerUnit = 80f;
+        TextureImporterSettings settings = new TextureImporterSettings();
+        importer.ReadTextureSettings(settings);
+        settings.spriteMeshType = SpriteMeshType.FullRect;
+        settings.spriteAlignment = (int)SpriteAlignment.Center;
+        settings.spritePivot = new Vector2(0.5f, 0.5f);
+        importer.SetTextureSettings(settings);
+        importer.SaveAndReimport();
+    }
+
+    private static void ValidateStarVariantFiles()
+    {
+        foreach (string name in StarVariantNames)
+        {
+            string path = $"{StarVariantsFolder}/star_{name}.png";
+            if (!File.Exists(path)) throw new InvalidOperationException($"Pixel star hazard variant is missing: {path}");
+        }
+    }
+
+    private static Sprite[] LoadStarVariantSprites()
+    {
+        Sprite[] sprites = new Sprite[StarVariantNames.Length];
+        for (int i = 0; i < StarVariantNames.Length; i++)
+        {
+            string path = $"{StarVariantsFolder}/star_{StarVariantNames[i]}.png";
+            AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceSynchronousImport | ImportAssetOptions.ForceUpdate);
+            ConfigurePixelStarSprite(path);
+            sprites[i] = AssetDatabase.LoadAssetAtPath<Sprite>(path);
+            if (sprites[i] == null) throw new InvalidOperationException($"Pixel star variant failed to import as a Sprite: {path}");
+        }
+        return sprites;
+    }
+
+    private static void ConfigurePixelStarSprite(string path)
+    {
+        TextureImporter importer = AssetImporter.GetAtPath(path) as TextureImporter;
+        if (importer == null) throw new InvalidOperationException($"No texture importer found for pixel star variant: {path}");
+        importer.textureType = TextureImporterType.Sprite;
+        importer.spriteImportMode = SpriteImportMode.Single;
+        importer.alphaIsTransparency = true;
+        importer.mipmapEnabled = false;
+        importer.filterMode = FilterMode.Point;
+        importer.textureCompression = TextureImporterCompression.Uncompressed;
+        importer.spritePixelsPerUnit = GetStarSpritePixelsPerUnit(path);
+        TextureImporterSettings settings = new TextureImporterSettings();
+        importer.ReadTextureSettings(settings);
+        settings.spriteMeshType = SpriteMeshType.FullRect;
+        importer.SetTextureSettings(settings);
+        importer.SaveAndReimport();
+    }
+
+    private static float GetStarSpritePixelsPerUnit(string path)
+    {
+        Texture2D texture = AssetDatabase.LoadAssetAtPath<Texture2D>(path);
+        return texture != null ? Mathf.Max(texture.width, texture.height) / 1.8f : 128f / 1.8f;
     }
 
     private static void EnsureFolders()
@@ -80,9 +286,26 @@ public static class MeteorShooterBuilder
             importer.spriteImportMode = SpriteImportMode.Single;
             importer.alphaIsTransparency = true;
             importer.mipmapEnabled = false;
-            importer.filterMode = FilterMode.Bilinear;
+            bool pixelStarVariant = path.StartsWith(StarVariantsFolder + "/", StringComparison.Ordinal);
+            bool playerIdleFrame = path.StartsWith(PlayerIdlePrefix, StringComparison.Ordinal);
+            bool projectileSprite = string.Equals(path, ProjectileSpritePath, StringComparison.Ordinal);
+            importer.filterMode = pixelStarVariant ? FilterMode.Point : FilterMode.Bilinear;
+            if (path.Contains("Background") || pixelStarVariant || playerIdleFrame || projectileSprite)
+            {
+                TextureImporterSettings settings = new TextureImporterSettings();
+                importer.ReadTextureSettings(settings);
+                settings.spriteMeshType = SpriteMeshType.FullRect;
+                if (playerIdleFrame || projectileSprite)
+                {
+                    settings.spriteAlignment = (int)SpriteAlignment.Center;
+                    settings.spritePivot = new Vector2(0.5f, 0.5f);
+                }
+                importer.SetTextureSettings(settings);
+            }
             importer.textureCompression = TextureImporterCompression.Uncompressed;
-            importer.spritePixelsPerUnit = path.Contains("Background") ? 155f : 128f;
+            importer.spritePixelsPerUnit = pixelStarVariant
+                ? GetStarSpritePixelsPerUnit(path)
+                : path.Contains("Background") ? 155f : projectileSprite ? 80f : 128f;
             importer.SaveAndReimport();
         }
     }
@@ -146,7 +369,7 @@ public static class MeteorShooterBuilder
     {
         GameObject go = new GameObject("Bullet");
         SpriteRenderer renderer = go.AddComponent<SpriteRenderer>();
-        renderer.sprite = AssetDatabase.LoadAssetAtPath<Sprite>("Assets/Art/Projectiles/laser.png");
+        renderer.sprite = AssetDatabase.LoadAssetAtPath<Sprite>(ProjectileSpritePath);
         renderer.sortingOrder = 3;
         go.transform.localScale = new Vector3(0.45f, 0.45f, 1f);
         Rigidbody2D body = go.AddComponent<Rigidbody2D>();
@@ -180,6 +403,42 @@ public static class MeteorShooterBuilder
         Asteroid asteroid = go.AddComponent<Asteroid>();
         SetFloat(asteroid, "baseSpeed", speed);
         GameObject prefab = PrefabUtility.SaveAsPrefabAsset(go, $"{PrefabFolder}/{name}.prefab");
+        UnityEngine.Object.DestroyImmediate(go);
+        return prefab;
+    }
+
+    private static GameObject CreateStarHazardPrefab(Sprite[] appearanceVariants)
+    {
+        if (appearanceVariants == null || appearanceVariants.Length != StarVariantNames.Length)
+            throw new InvalidOperationException("The pixel star hazard requires exactly eight appearance variants.");
+        for (int i = 0; i < appearanceVariants.Length; i++)
+            if (appearanceVariants[i] == null) throw new InvalidOperationException($"Pixel star variant {StarVariantNames[i]} is missing.");
+        GameObject go = new GameObject("StarHazard");
+        SpriteRenderer renderer = go.AddComponent<SpriteRenderer>();
+        renderer.sprite = appearanceVariants[0];
+        renderer.color = Color.white;
+        renderer.sortingOrder = 2;
+        go.transform.localScale = new Vector3(0.92f, 0.92f, 1f);
+        Rigidbody2D body = go.AddComponent<Rigidbody2D>();
+        body.bodyType = RigidbodyType2D.Dynamic;
+        body.gravityScale = 0f;
+        body.collisionDetectionMode = CollisionDetectionMode2D.Continuous;
+        body.constraints = RigidbodyConstraints2D.None;
+        PolygonCollider2D collider = go.AddComponent<PolygonCollider2D>();
+        collider.isTrigger = true;
+        collider.points = new[]
+        {
+            new Vector2(0f, 0.675f), new Vector2(0.21f, 0.267f), new Vector2(0.675f, 0.267f),
+            new Vector2(0.38f, -0.07f), new Vector2(0.55f, -0.65f), new Vector2(0f, -0.38f),
+            new Vector2(-0.55f, -0.65f), new Vector2(-0.38f, -0.07f), new Vector2(-0.675f, 0.267f),
+            new Vector2(-0.21f, 0.267f)
+        };
+        StarHazard hazard = go.AddComponent<StarHazard>();
+        SetFloat(hazard, "baseSpeed", 2.6f);
+        SetFloat(hazard, "minimumRotationSpeed", 35f);
+        SetFloat(hazard, "maximumRotationSpeed", 80f);
+        SetObjectArray(hazard, "appearanceVariants", appearanceVariants);
+        GameObject prefab = PrefabUtility.SaveAsPrefabAsset(go, $"{PrefabFolder}/StarHazard.prefab");
         UnityEngine.Object.DestroyImmediate(go);
         return prefab;
     }
@@ -219,15 +478,18 @@ public static class MeteorShooterBuilder
         Canvas canvas = CreateCanvas();
         CreateText(canvas.transform, "METEOR\nSHOOTER", 58, new Vector2(0.12f, 0.62f), new Vector2(0.88f, 0.9f), new Color(0.86f, 0.97f, 1f), TextAnchor.MiddleCenter, FontStyle.Bold);
         CreateText(canvas.transform, "DEFEND THE LAST STARLANE", 17, new Vector2(0.08f, 0.56f), new Vector2(0.92f, 0.63f), new Color(0.34f, 0.88f, 1f), TextAnchor.MiddleCenter, FontStyle.Normal);
+        Text highScore = CreateText(canvas.transform, "HIGH SCORE  0000", 21, new Vector2(0.08f, 0.48f), new Vector2(0.92f, 0.55f), new Color(1f, 0.72f, 0.27f), TextAnchor.MiddleCenter, FontStyle.Bold);
+        highScore.gameObject.name = "MainMenuHighScore";
+        SetObject(controller, "highScoreText", highScore);
         Button play = CreateButton(canvas.transform, "PLAY", new Vector2(0.2f, 0.38f), new Vector2(0.8f, 0.47f));
         Button quit = CreateButton(canvas.transform, "QUIT", new Vector2(0.2f, 0.27f), new Vector2(0.8f, 0.36f));
         UnityEventTools.AddPersistentListener(play.onClick, controller.Play);
         UnityEventTools.AddPersistentListener(quit.onClick, controller.Quit);
-        CreateText(canvas.transform, "A / D  MOVE     SPACE  FIRE     ESC  PAUSE", 14, new Vector2(0.05f, 0.07f), new Vector2(0.95f, 0.14f), new Color(0.6f, 0.75f, 0.86f), TextAnchor.MiddleCenter, FontStyle.Normal);
+        CreateText(canvas.transform, "WASD / ARROWS MOVE     LEFT CLICK AIM / FIRE     ESC PAUSE", 14, new Vector2(0.05f, 0.07f), new Vector2(0.95f, 0.14f), new Color(0.6f, 0.75f, 0.86f), TextAnchor.MiddleCenter, FontStyle.Normal);
         EditorSceneManager.SaveScene(scene, "Assets/Scenes/MainMenu.unity");
     }
 
-    private static void BuildGameplayScene(GameObject playerPrefab, GameObject[] asteroids, GameObject asteroidFx, GameObject playerFx)
+    private static void BuildGameplayScene(GameObject playerPrefab, GameObject[] asteroids, GameObject starHazard, GameObject asteroidFx, GameObject playerFx)
     {
         Scene scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
         Camera camera = CreateCamera();
@@ -238,6 +500,11 @@ public static class MeteorShooterBuilder
 
         AsteroidSpawner spawner = new GameObject("AsteroidSpawner").AddComponent<AsteroidSpawner>();
         SetObjectArray(spawner, "asteroidPrefabs", asteroids);
+        SetObject(spawner, "starHazardPrefab", starHazard);
+        SetFloat(spawner, "starSpawnChance", 0.24f);
+        SetFloat(spawner, "spawnMargin", 1.35f);
+        SetFloat(spawner, "minimumPlayerDistance", 4f);
+        SetFloat(spawner, "targetJitter", 1.6f);
         GameManager manager = new GameObject("GameManager").AddComponent<GameManager>();
 
         Canvas canvas = CreateCanvas();
@@ -288,6 +555,7 @@ public static class MeteorShooterBuilder
         camera.clearFlags = CameraClearFlags.SolidColor;
         camera.transform.position = new Vector3(0f, 0f, -10f);
         go.AddComponent<AudioListener>();
+        go.AddComponent<CameraFollow>();
         return camera;
     }
 
@@ -295,24 +563,25 @@ public static class MeteorShooterBuilder
     {
         Sprite sprite = AssetDatabase.LoadAssetAtPath<Sprite>("Assets/Art/Background/space_background.png");
         GameObject root = new GameObject("ScrollingBackground");
-        Transform[] panels = new Transform[2];
-        float height = 10.82f;
-        for (int i = 0; i < 2; i++)
+        Transform[] panels = new Transform[1];
+        for (int i = 0; i < panels.Length; i++)
         {
             GameObject panel = new GameObject($"SpacePanel_{i + 1}");
             panel.transform.SetParent(root.transform);
-            panel.transform.position = new Vector3(0f, i * height, 2f);
+            panel.transform.position = new Vector3(camera.transform.position.x, camera.transform.position.y, 2f);
             SpriteRenderer renderer = panel.AddComponent<SpriteRenderer>();
             renderer.sprite = sprite;
             renderer.sortingOrder = -10;
-            float sx = 6.25f / sprite.bounds.size.x;
-            float sy = height / sprite.bounds.size.y;
-            panel.transform.localScale = new Vector3(sx, sy, 1f);
+            float height = camera.orthographicSize * 2f;
+            float width = height * camera.aspect;
+            float scale = Mathf.Max(width / sprite.bounds.size.x, height / sprite.bounds.size.y);
+            panel.transform.localScale = new Vector3(scale, scale, 1f);
             panels[i] = panel.transform;
         }
         BackgroundScroller scroller = root.AddComponent<BackgroundScroller>();
         SetObjectArray(scroller, "panels", panels);
-        SetFloat(scroller, "panelHeight", height);
+        SetFloat(scroller, "parallaxFactor", 0.24f);
+        SetFloat(scroller, "starParallaxFactor", 0.82f);
     }
 
     private static Canvas CreateCanvas()
