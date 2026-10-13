@@ -3,6 +3,7 @@ using UnityEngine;
 
 namespace MeteorShooter
 {
+    [ExecuteAlways]
     [DefaultExecutionOrder(200)]
     public sealed class BackgroundScroller : MonoBehaviour
     {
@@ -17,10 +18,16 @@ namespace MeteorShooter
         private Texture2D generatedStarTexture;
         private Vector2 previousViewportSize;
 
-        private void Awake()
+        private void OnEnable()
+        {
+            InitializeLayers();
+        }
+
+        private void InitializeLayers()
         {
             mainCamera = Camera.main;
             if (mainCamera == null || panels == null || panels.Length == 0 || panels[0] == null) return;
+            if (mainCamera.gameObject.scene != gameObject.scene) return;
 
             backgroundRenderer = panels[0].GetComponent<SpriteRenderer>();
             if (backgroundRenderer == null || backgroundRenderer.sprite == null) return;
@@ -34,20 +41,21 @@ namespace MeteorShooter
                 if (extraRenderer != null) extraRenderer.enabled = false;
             }
 
-            CreateStarLayer();
+            if (starsRenderer == null) CreateStarLayer();
             UpdateLayerSizes();
             UpdateLayerPositions();
         }
 
         private void LateUpdate()
         {
+            if (mainCamera == null || backgroundRenderer == null || starsRenderer == null) InitializeLayers();
             if (mainCamera == null || backgroundRenderer == null) return;
 
             Vector2 viewportSize = GetViewportSize();
             if (viewportSize != previousViewportSize) UpdateLayerSizes();
 
             GameManager manager = GameManager.Instance;
-            if (manager != null && manager.IsPaused) return;
+            if (Application.IsPlaying(gameObject) && manager != null && manager.IsPaused) return;
             UpdateLayerPositions();
         }
 
@@ -111,6 +119,8 @@ namespace MeteorShooter
             generatedStarSprite.hideFlags = HideFlags.DontSave;
 
             GameObject starsObject = new GameObject("ParallaxStars");
+            // Rebuild this transient layer after reload; never serialize generated textures into a scene.
+            starsObject.hideFlags = HideFlags.DontSave;
             starsObject.transform.SetParent(backgroundRenderer.transform.parent, false);
             starsObject.transform.position = new Vector3(0f, 0f, 1.8f);
             starsRenderer = starsObject.AddComponent<SpriteRenderer>();
@@ -166,10 +176,20 @@ namespace MeteorShooter
             if (pixels[index].a < color.a) pixels[index] = color;
         }
 
-        private void OnDestroy()
+        private void OnDisable()
         {
-            if (generatedStarSprite != null) Destroy(generatedStarSprite);
-            if (generatedStarTexture != null) Destroy(generatedStarTexture);
+            if (starsRenderer != null) ReleaseGenerated(starsRenderer.gameObject);
+            if (generatedStarSprite != null) ReleaseGenerated(generatedStarSprite);
+            if (generatedStarTexture != null) ReleaseGenerated(generatedStarTexture);
+            starsRenderer = null;
+            generatedStarSprite = null;
+            generatedStarTexture = null;
+        }
+
+        private static void ReleaseGenerated(UnityEngine.Object value)
+        {
+            if (Application.isPlaying) Destroy(value);
+            else DestroyImmediate(value);
         }
     }
 }

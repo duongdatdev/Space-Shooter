@@ -53,6 +53,8 @@ After scripts and art have imported without compile errors, run **Meteor Shooter
 
 ## Verification
 
+The nebula and parallax stars are also visible in Edit Mode. Both scenes use a camera-space Canvas so the UI appears over the world in Scene view. Use **Meteor Shooter > Frame Scene Like Game** to frame the scene with the gameplay camera's position and zoom, with the grid hidden and Gizmos enabled so the camera frame remains visible. You can turn the Scene view grid back on when editing.
+
 Run EditMode tests from **Window > General > Test Runner**. The project was also checked in Play Mode for menu/HUD rendering, asteroid spawning, projectile collision and scoring, single-life damage with invulnerability, pause/resume, Game Over flow, and console errors.
 
 ## Known limitations

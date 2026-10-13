@@ -574,8 +574,8 @@ public static class MeteorShooterBuilder
             renderer.sortingOrder = -10;
             float height = camera.orthographicSize * 2f;
             float width = height * camera.aspect;
-            float scale = Mathf.Max(width / sprite.bounds.size.x, height / sprite.bounds.size.y);
-            panel.transform.localScale = new Vector3(scale, scale, 1f);
+            renderer.drawMode = SpriteDrawMode.Tiled;
+            renderer.size = new Vector2(width, height) + (Vector2)sprite.bounds.size * 2f;
             panels[i] = panel.transform;
         }
         BackgroundScroller scroller = root.AddComponent<BackgroundScroller>();
@@ -584,11 +584,32 @@ public static class MeteorShooterBuilder
         SetFloat(scroller, "starParallaxFactor", 0.82f);
     }
 
+    [MenuItem("Meteor Shooter/Frame Scene Like Game")]
+    public static void FrameSceneLikeGame()
+    {
+        Camera camera = Camera.main;
+        if (camera == null) return;
+        SceneView view = SceneView.lastActiveSceneView ?? EditorWindow.GetWindow<SceneView>();
+        view.in2DMode = true;
+        view.sceneLighting = false;
+        view.showGrid = false;
+        view.drawGizmos = true;
+        view.pivot = new Vector3(camera.transform.position.x, camera.transform.position.y, 0f);
+        view.rotation = camera.transform.rotation;
+        view.size = camera.orthographicSize;
+        view.orthographic = true;
+        view.Repaint();
+        view.Focus();
+    }
+
     private static Canvas CreateCanvas()
     {
         GameObject go = new GameObject("Canvas");
         Canvas canvas = go.AddComponent<Canvas>();
-        canvas.renderMode = RenderMode.ScreenSpaceOverlay;
+        canvas.renderMode = RenderMode.ScreenSpaceCamera;
+        canvas.worldCamera = Camera.main;
+        canvas.planeDistance = 1f;
+        canvas.sortingOrder = 100;
         CanvasScaler scaler = go.AddComponent<CanvasScaler>();
         scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
         scaler.referenceResolution = new Vector2(720, 1280);
